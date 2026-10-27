@@ -93,10 +93,10 @@
    const {data:rows,error}=await supabaseClient.from('lovora_community_join_requests').select('id,user_id,created_at').eq('community_id',b.dataset.communityId).eq('status','pending').order('created_at',{ascending:true});
    if(error){toast('Apply migration 06 to enable requests: '+error.message);return;}
    if(!rows?.length){toast('No pending join requests.');return;}
-   for(const r of rows){const {data:profile}=await supabaseClient.from('profiles').select('display_name,username').eq('id',r.user_id).maybeSingle();const label=profile?.display_name||profile?.username||r.user_id;const approve=confirm(`${label} requested to join ${b.dataset.communityName}. Approve? Choose Cancel to reject.`);const {error:reviewError}=await supabaseClient.rpc('lovora_review_community_join_request',{p_request_id:r.id,p_approve:approve});if(reviewError)toast(reviewError.message);else toast(approve?'Request approved.':'Request rejected.');}
+   for(const r of rows){const {data:profile}=await supabaseClient.from('profiles').select('display_name,username').eq('id',r.user_id).maybeSingle();const label=profile?.display_name||profile?.username||r.user_id;const approve=confirm(`${label} requested to join ${b.dataset.communityName}. Approve? Choose Cancel to reject.`);const {error:reviewError}=await supabaseClient.rpc('lovora_review_community_request',{p_request_id:r.id,p_approve:approve});if(reviewError)toast(reviewError.message);else toast(approve?'Request approved.':'Request rejected.');}
    await loadRealCommunities();
   }));
-  grid.querySelectorAll('.communityInvite').forEach(b=>b.addEventListener('click',async()=>{const target=prompt("Enter the invited LOVORA user account UUID. They can find it in their account details.");if(!target)return;const {error}=await supabaseClient.rpc('lovora_invite_community_member',{p_community_id:b.dataset.communityId,p_invited_user_id:target.trim()});if(error)toast(error.message);else toast('Invitation sent.');}));
+  grid.querySelectorAll('.communityInvite').forEach(b=>b.addEventListener('click',async()=>{const target=prompt("Enter the invited LOVORA user account UUID. They can find it in their account details.");if(!target)return;const {error}=await supabaseClient.rpc('lovora_invite_to_community',{p_community_id:b.dataset.communityId,p_invited_user_id:target.trim()});if(error)toast(error.message);else toast('Invitation sent.');}));
   wireCommunityChatButtons();
  }
  $('#myCommunityInvitesBtn')?.addEventListener('click',async()=>{
