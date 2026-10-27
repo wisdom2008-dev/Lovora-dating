@@ -1,0 +1,5 @@
+LEGACY SQL SAFETY NOTE
+
+The older supabase_schema.sql and lovora_coin_messaging.sql files are intentionally excluded from this consolidated package. They assume a different schema (user_a/user_b, text match IDs, and messages.body) than your actual live project (matches.user1/user2, UUID match_id, and messages.content). Running those files against your existing database could fail or alter the wrong structures.
+
+Do not run old SQL copied from earlier ZIPs without adapting it to the live schema. This package still includes 04_lovora_platform_features.sql and 05_communities_notifications_functions.sql as a proposed migration set; review and test them in a separate Supabase project before applying to production.

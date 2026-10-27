@@ -1,0 +1,45 @@
+LOVORA FEATURE UPDATE — PAYMENT NOT CONNECTED YET
+
+Preserved
+- LOVORA Gold / premium plan screen and subscription buttons (no payment processing).
+- Existing profiles, matches, likes and direct messages code/schema assumptions.
+- Flat 2D coin visuals, wallet/gift catalogue, top notification control.
+
+Audit fixes made after the initial package
+- Removed two overwritten direct-message submit handlers; one safety-aware handler remains.
+- Tightened the community-membership insert policy so direct client inserts cannot bypass Gold-only access rules.
+
+Updated in this package
+- Community creation now opens a bottom sheet instead of browser prompt boxes.
+- Community form fields: name, description, category, public/private visibility, rules, and Gold-only toggle.
+- Community SQL migration stores rules, privacy and premium flag; premium-community join is gated by profiles.premium_until.
+- Community cards label Gold-only communities.
+- Profile overflow menu opens from the profile header and jumps to personal details, photos, interests, safety, and Gold.
+- Chat overflow opens member actions for profile information, report and block shortcuts.
+- Blue and Gold verification icons use a many-pointed badge silhouette similar in style to familiar verification badges. The app must only award real verification server-side.
+- Gift catalogue remains available; selecting a gift is a local preview action until a secure server-side coin ledger exists. Voice-call button checks the local gift-preview flag and still explains that a real calling provider is required.
+- Notification counter layout has a final CSS correction to keep its number centered inside the red badge.
+
+Important honest limitations
+- Payment is intentionally not connected. Premium status must be assigned securely on the server; a client checkbox cannot grant Gold.
+- The community creation SQL signature changed. Apply both SQL files in a staging Supabase project first; do not run them against production until reviewed.
+- Private community invitation/approval flow is not complete. Private communities are not publicly listed to other users.
+- Gift sending currently marks a local preview only. It does not debit coins or create a secure gift transaction.
+- Real voice/video calls, voice notes, photo moderation, identity verification review, and complete server-backed block/report enforcement require backend/provider work.
+- Demo chat profile actions show a preview because demo conversations have no real profile record. Real matched users need their profile rows loaded from Supabase to display full details.
+- JavaScript syntax and ZIP integrity were checked; a live end-to-end browser test against Supabase was not performed.
+
+LATEST AUDIT UPDATE (2026-10-27)
+- Public Gold communities remain visible in the community directory for all signed-in users; non-Gold users see the Gold lock and are directed to Gold plans when they try to join.
+- Community directory member counts now use a server-side aggregate RPC that returns counts only, instead of requesting other members' user IDs from the browser.
+- The membership lookup now requests only the signed-in user's own community memberships.
+- These changes require the updated 05_communities_notifications_functions.sql migration to be applied in a test Supabase project before use. They have not been live-tested against the production project.
+
+
+PRIVATE COMMUNITY WORKFLOWS INCLUDED IN THIS PACKAGE
+- Discoverable private community cards with Request to join action.
+- Owner/moderator review of pending join requests; approval adds membership and sends a notification.
+- Owner/moderator invitation by target account UUID; invitees can accept or decline from the Invitations button.
+- Gold-only public/private communities remain visible; membership and invite/request actions check active premium_until server-side.
+- Community chat read/send remains membership-gated; message notification trigger is included in migration 05.
+- These database workflows require migrations 04, 05, and 06 in a test Supabase project before production rollout.

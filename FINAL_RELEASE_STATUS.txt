@@ -1,0 +1,21 @@
+LOVORA — CONSOLIDATED NON-PAYMENT BUILD STATUS
+
+CHANGES IN THIS PACKAGE
+- Keeps the existing profile, swipe/match, and direct-message code and configured Supabase URL/publishable key.
+- Adds a connected community directory with starter public communities seeded by the additive migration.
+- Adds join/leave controls through Supabase RPCs.
+- Adds a community group-chat panel with message history, send via lovora_send_community_message, realtime subscription attempt, and polling fallback.
+- Adds notification fetch/read actions and a realtime subscription attempt with polling fallback for badge/list refresh.
+- Keeps the sticky header/notification access and flat 2D coin styling.
+- Payment/purchases intentionally excluded; coin/gift actions remain clearly marked preview-only and do not charge anything.
+
+CHECKS RUN
+- node --check app.js: passed.
+- node --check lovora-ui.js: passed.
+- ZIP integrity check: run after packaging.
+
+IMPORTANT DEPLOYMENT NOTES
+- The browser app cannot create its required database schema by itself. After backing up Supabase, review and apply 04_lovora_platform_features.sql and then 05_communities_notifications_functions.sql in a staging project first. These are additive migrations and are written not to replace existing matching or direct-message functions, but still need staging validation before production.
+- Do not run the older incompatible supabase_schema.sql or lovora_coin_messaging.sql from previous ZIPs.
+- No live browser/end-to-end test against your Supabase project has been performed here. A static syntax pass is not proof of live operation.
+- Voice/video calling and external identity-verification review require providers and are not represented as working features. Payments are excluded as requested.

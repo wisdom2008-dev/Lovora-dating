@@ -1,0 +1,48 @@
+LOVORA BUILD PACKAGE — HONEST STATUS
+
+This package uses the latest LOVORA UI Polished Fix project as its base. It preserves the existing UI and Supabase client wiring and includes an additive backend foundation for the next platform features.
+
+WHAT IS PRESENT IN THE PROJECT
+- Existing sign-in/sign-up modal, profile, discovery, likes/matches and existing text-message code.
+- Dark/light theme and responsive interface, full-screen inbox/chat styling, More menu, communities directory, notifications/safety views, coin/gift previews, Gold page and verification access links.
+- Existing 03_chat_read_receipts.sql migration.
+- New 04_lovora_platform_features.sql with additional tables and RLS policies for communities, community membership/messages, notifications, verification requests, violations, wallet ledger, gift catalogue, subscriptions, blocks and reports.
+- Existing config.js points to the configured Supabase project using its publishable key; no service-role key is included.
+
+IMPORTANT: UI VS LIVE FEATURES
+The communities directory, some notification states, coin/gift animations, calls, voice notes, subscription checkout, and verification screens still include preview elements. This package does not by itself integrate a payment provider, identity/face verification provider, calling infrastructure, or production moderation console. The SQL creates data foundations, not those external services or trusted server workflows. Wallet/coin balances and subscription status are intentionally not client-writable.
+
+BEFORE RUNNING SQL
+1. Back up the working app and database.
+2. Test in a separate Supabase project first.
+3. Inspect the existing live schema. LOVORA versions in previous ZIPs have differed (for example matches.user1/user2 vs user_a/user_b and messages.content vs body). The new 04 migration is additive and avoids altering those core tables, but review policies for your app's actual security model.
+4. Run 04_lovora_platform_features.sql only if you want the new table foundation. Do not rerun older full starter schema scripts against the live project blindly.
+5. The existing 03_chat_read_receipts.sql may assume a particular message schema; check it against the live schema before running.
+
+DEPLOY WEBSITE
+1. Extract the ZIP.
+2. Open the folder that contains index.html, app.js, style.css, config.js and lovora-ui.js.
+3. Upload/deploy those files together to your existing Netlify site.
+4. Test login, profile editing, matching and a real conversation with your two test accounts before treating the new release as production-ready.
+
+PRODUCTION GAPS TO COMPLETE NEXT
+- Align all queries and RPCs to the actual live schema and remove duplicate legacy handlers.
+- Test row-level security with two ordinary user accounts.
+- Secure RPCs for coin purchases/debits, gifts, subscription entitlements and read receipts.
+- Connect payment provider webhooks and subscription validation.
+- Integrate real identity/face verification with consent and data-retention rules.
+- Implement actual voice notes and audio/video calls with secure storage and real-time calling infrastructure.
+- Implement server-side spam moderation, admin review, appeals and violation notifications.
+- Add automated tests and verify the app on mobile before launch.
+
+
+UPDATE INCLUDED — 2026-10-27
+- Replaced the coin emoji-like orb in the header and wallet with a flat, 2D coin token SVG.
+- Made the header sticky so the notification shortcut remains accessible while scrolling.
+- Replaced the notification symbol with a clear bell icon and unread count.
+- Kept the notification button visible on narrow screens (including <= 360px); the Gold shortcut hides first on very narrow screens to preserve space.
+- Updated the notification count to clear when Mark all read is tapped.
+- Preserved the existing Supabase URL and publishable key in config.js.
+
+HONEST IMPLEMENTATION STATUS
+This package is an incremental UI and interaction update, not a claim that every roadmap feature is complete. Existing matching and text messaging should be preserved, but test them in a staging copy before deploying. Community previews, gifts/wallet, verification, subscriptions, and notifications still need their secure backend workflows connected and tested. Voice/video calls and real payments are not yet implemented. Do not run SQL migrations against production until the live schema and policies have been reviewed.
