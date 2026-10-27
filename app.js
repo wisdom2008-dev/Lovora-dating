@@ -110,3 +110,152 @@ loadProfiles();
  document.querySelectorAll('.subscribe').forEach(b=>b.addEventListener('click',()=>{info('LOVORA Plus',`You selected the ${b.dataset.plan} plan. Payment is not connected yet, so your account has not been charged and unlimited messaging has not been activated. We will connect a verified payment provider before launch.`)}));
  window.lovoraPreviewCoins={get balance(){return coins},set plan(v){plan=v;localStorage.setItem(PLAN_KEY,v);saveCoins()}};
 })();
+
+/* LOVORA CHAT FIX (2026-10-27)
+   Consolidates inbox loading and message sending so the active conversation,
+   partner details, history, and realtime updates stay in sync. */
+let lovoraChatLoadVersion = 0;
+let lovoraChatBusy = false;
+
+async function lovoraFixedLoadChats() {
+  const status = document.querySelector('#chatStatus');
+  const list = document.querySelector('#chatList');
+  const inbox = document.querySelector('#inboxPeople');
+  const name = document.querySelector('#chatPersonName');
+  const avatar = document.querySelector('#chatAvatar');
+  if (!status || !list) return;
+
+  const version = ++lovoraChatLoadVersion;
+  const safeText = value => escapeHtml(value == null ? '' : String(value));
+
+  if (!supabaseClient || !user) {
+    status.textContent = 'Preview mode · Sample messages are stored on this device only.';
+    const key = typeof activeMatch === 'string' ? activeMatch : (demoMatches[0] || 'demo-amara');
+    const person = demoPeople.find(p => p.id === key) || demoPeople[0];
+    if (name) name.textContent = person.display_name;
+    if (avatar) { avatar.className = 'chatAvatar'; avatar.textContent = (person.display_name || 'L')[0]; }
+    list.innerHTML = demoMessages.map(m => `<div class="messageRow ${m.mine ? 'outgoing' : 'incoming'}"><p class="bubble ${m.mine ? 'mine' : ''}">${safeText(m.content ?? m.body ?? '')}</p></div>`).join('') || '<div class="chatEmpty"><div class="chatEmptyIcon">♡</div><strong>Your next connection starts here</strong><p>Match with someone you like, then say hello.</p></div>';
+    if (inbox) inbox.querySelectorAll('[data-matchid]').forEach(el => el.classList.remove('selected'));
+    list.scrollTop = list.scrollHeight;
+    return;
+  }
+
+  status.textContent = 'Loading your conversations…';
+  const { data: matches, error: matchError } = await supabaseClient
+    .from('matches').select('id,user1,user2,created_at')
+    .or(`user1.eq.${user.id},user2.eq.${user.id}`)
+    .order('created_at', { ascending: false });
+  if (version !== lovoraChatLoadVersion) return;
+  if (matchError) { status.textContent = `Could not load conversations: ${matchError.message}`; return; }
+
+  if (!matches?.length) {
+    activeMatch = null;
+    if (inbox) inbox.innerHTML = '<p class="muted">Your matches will appear here.</p>';
+    if (name) name.textContent = 'Your matches';
+    if (avatar) { avatar.className = 'chatAvatar'; avatar.textContent = '♡'; }
+    status.textContent = 'Match with someone first to start a conversation.';
+    list.innerHTML = '<div class="chatEmpty"><div class="chatEmptyIcon">♡</div><strong>No conversations yet</strong><p>When you and another member like each other, your chat will appear here.</p></div>';
+    if (chatChannel) { try { await supabaseClient.removeChannel(chatChannel); } catch (_) {} chatChannel = null; }
+    return;
+  }
+
+  if (!activeMatch || !matches.some(m => m.id === activeMatch)) activeMatch = matches[0].id;
+  const otherIds = [...new Set(matches.map(m => m.user1 === user.id ? m.user2 : m.user1))];
+  const { data: people, error: peopleError } = await supabaseClient
+    .from('profiles').select('id,display_name,photo_url,age,city,bio,interests').in('id', otherIds);
+  if (version !== lovoraChatLoadVersion) return;
+  if (peopleError) { status.textContent = `Could not load match profiles: ${peopleError.message}`; return; }
+  const byId = new Map((people || []).map(p => [p.id, p]));
+
+  if (inbox) {
+    inbox.innerHTML = matches.map(m => {
+      const otherId = m.user1 === user.id ? m.user2 : m.user1;
+      const p = byId.get(otherId) || {};
+      const photo = p.photo_url ? `<img src="${safeText(p.photo_url)}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;border-radius:50%">` : safeText((p.display_name || 'L')[0]);
+      return `<button type="button" class="inboxPerson ${m.id === activeMatch ? 'selected' : ''}" data-matchid="${safeText(m.id)}" data-otherid="${safeText(otherId)}"><span class="inboxAvatar">${photo}</span><span class="inboxPersonText"><b>${safeText(p.display_name || 'LOVORA member')}</b><small>Open conversation</small></span><span class="inboxMeta"><small>Chat</small></span></button>`;
+    }).join('');
+  }
+
+  const match = matches.find(m => m.id === activeMatch);
+  const otherId = match ? (match.user1 === user.id ? match.user2 : match.user1) : null;
+  const partner = otherId ? byId.get(otherId) : null;
+  if (name) name.textContent = partner?.display_name || 'Your match';
+  if (avatar) {
+    avatar.className = 'chatAvatar';
+    avatar.innerHTML = partner?.photo_url ? `<img src="${safeText(partner.photo_url)}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;border-radius:50%">` : safeText((partner?.display_name || 'L')[0]);
+  }
+
+  const { data: messages, error: messageError } = await supabaseClient
+    .from('messages').select('*').eq('match_id', activeMatch)
+    .order('created_at', { ascending: true }).limit(200);
+  if (version !== lovoraChatLoadVersion) return;
+  if (messageError) { status.textContent = `Could not load messages: ${messageError.message}`; return; }
+
+  status.textContent = 'Connected match · Be respectful and never share financial details.';
+  list.innerHTML = (messages || []).map(m => {
+    const mine = m.sender_id === user.id;
+    const body = m.content ?? m.body ?? '';
+    const time = m.created_at ? new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+    return `<div class="messageRow ${mine ? 'outgoing' : 'incoming'}"><p class="bubble ${mine ? 'mine' : ''}">${safeText(body)}${time ? `<small>${safeText(time)}</small>` : ''}</p></div>`;
+  }).join('') || '<div class="chatEmpty"><div class="chatEmptyIcon">♡</div><strong>Say hello</strong><p>Start with something friendly and genuine.</p></div>';
+  list.scrollTop = list.scrollHeight;
+
+  // Optional read-receipt function: do not break chat if the migration is not installed.
+  try { await supabaseClient.rpc('mark_lovora_messages_read', { p_match_id: activeMatch }); } catch (_) {}
+
+  if (chatChannel) { try { await supabaseClient.removeChannel(chatChannel); } catch (_) {} chatChannel = null; }
+  const channelMatchId = activeMatch;
+  chatChannel = supabaseClient.channel(`lovora-chat-${channelMatchId}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `match_id=eq.${channelMatchId}` }, payload => {
+      if (document.visibilityState === 'visible' && activeMatch === channelMatchId && payload?.eventType !== 'DELETE') {
+        // Debounce bursty realtime events to avoid overlapping history loads.
+        clearTimeout(window.lovoraChatRefreshTimer);
+        window.lovoraChatRefreshTimer = setTimeout(() => lovoraFixedLoadChats(), 180);
+      }
+    }).subscribe();
+}
+
+// Replace the older duplicate implementation with the single fixed loader.
+loadChats = lovoraFixedLoadChats;
+window.loadChats = lovoraFixedLoadChats;
+
+// A single send handler prevents the preview handler from overriding real messaging.
+if (document.querySelector('#messageForm')) {
+  document.querySelector('#messageForm').onsubmit = async event => {
+    event.preventDefault();
+    const input = document.querySelector('#messageInput');
+    const body = input?.value?.trim();
+    if (!body) return;
+    if (body.length > 2000) return toast('Messages must be 2,000 characters or fewer.');
+    const rudeWords = ['fuck', 'shit', 'bitch', 'bastard', 'idiot', 'moron', 'stupid'];
+    if (rudeWords.some(word => new RegExp(`(^|\\W)${word}($|\\W)`, 'i').test(body))) return info('Respectful chat only', 'Please avoid insults or abusive language.');
+    if (/(send nudes|show me your nude|explicit photo|dick pic|naked photo)/i.test(body)) return info('Message blocked', 'Requests for nude or explicit images are not allowed.');
+
+    if (!supabaseClient || !user) {
+      if (typeof demoMessages === 'undefined') return toast('Preview chat is unavailable.');
+      demoMessages.push({ body, mine: true });
+      try { localStorage.setItem('lovoraDemoMessages', JSON.stringify(demoMessages)); } catch (_) {}
+      input.value = '';
+      await lovoraFixedLoadChats();
+      toast('Preview message added on this device only.');
+      return;
+    }
+    if (!activeMatch) return toast('Open a conversation with one of your matches first.');
+    if (lovoraChatBusy) return;
+    lovoraChatBusy = true;
+    const sendButton = document.querySelector('#messageForm button[type="submit"], #messageForm .sendBubble');
+    if (sendButton) sendButton.disabled = true;
+    try {
+      const { error } = await supabaseClient.rpc('send_lovora_message', { p_match_id: activeMatch, p_body: body });
+      if (error) { toast(`Message not sent: ${error.message}`); return; }
+      input.value = '';
+      await lovoraFixedLoadChats();
+      toast('Message sent.');
+    } catch (error) {
+      toast(`Message not sent: ${error?.message || 'Please try again.'}`);
+    } finally {
+      lovoraChatBusy = false;
+      if (sendButton) sendButton.disabled = false;
+    }
+  };
+}
