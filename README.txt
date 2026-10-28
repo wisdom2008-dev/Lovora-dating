@@ -40,3 +40,12 @@ COMMUNITY WORKFLOW UPDATE (2026-10-27)
 - SQL order for a NEW TEST PROJECT: 04_lovora_platform_features.sql, 05_communities_notifications_functions.sql, then 06_private_community_workflows.sql. Existing live projects must compare current schema and policies first; do not blindly rerun on production.
 - Current UI uses browser confirm/prompt dialogs for request review/invite entry; a polished custom management modal is a future UI refinement.
 - No live Supabase end-to-end test was run during packaging.
+
+
+UI + WALLET/GIFT UPDATE (2026-10-28)
+- Removed the sign-up preview button and made the login/sign-up modal opaque so coin and notification controls are not visible behind it.
+- Community group chat now slides in from the left as a full-screen panel with a light lavender message body. Sender names are clickable and open member profile details with report/block actions.
+- Added 08_secure_wallet_gifts_messages.sql: seeds 500 welcome coins once for existing/new accounts, provides a server-read wallet balance, charges 1 coin per private message, rejects insufficient balance, and delivers gifts into the private chat with a gift notification.
+- Before using the wallet changes, review and run migration 08 in Supabase SQL Editor AFTER the wallet, transaction, gifts, notifications, matches, messages and block tables already exist. Do not rerun older schema files blindly on the live project.
+- Coin purchases are not enabled because no verified payment provider is connected. The 500 welcome coins are one-time starter coins; the browser cannot directly set a balance.
+- JavaScript syntax checks passed while packaging. This archive has not been end-to-end tested against the live Supabase project; test with two accounts before deploying.

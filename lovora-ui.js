@@ -126,13 +126,15 @@
  function wireCommunityChatButtons(){
   $$('.communityOpenChat').forEach(b=>{if(b.dataset.wired)return;b.dataset.wired='1';b.addEventListener('click',()=>openCommunityChat(b.dataset.openCommunity,b.dataset.communityName,b.dataset.communityDescription));});
  }
+ function openCommunityMemberProfile(pr){const modal=$('#memberActionModal');$('#memberActionName').textContent=pr.display_name||pr.username||'LOVORA member';$('#memberActionAvatar').textContent=(pr.display_name||pr.username||'M').slice(0,1).toUpperCase();$('#memberActionBio').textContent=pr.age?`${pr.age}${pr.city?' · '+pr.city:''}`:'Community member';$('#memberActionDetails').innerHTML=`<div><b>About</b><span>${safe(pr.bio||'This member has not added a bio yet.')}</span></div><div><b>Interests</b><span>${safe((pr.interests||[]).join(', ')||'No interests added yet.')}</span></div>`;modal.hidden=false;$('#viewMemberProfile').onclick=()=>{modal.hidden=true;toast('Profile details shown. Full profile navigation can be added to the profile view.');};$('#reportMemberAction').onclick=()=>{modal.hidden=true;$('#safetyTarget').value=pr.display_name||pr.username||pr.id;window.showView('safety');};$('#blockMemberAction').onclick=()=>{modal.hidden=true;$('#safetyTarget').value=pr.display_name||pr.username||pr.id;window.showView('safety');};}
+
  async function openCommunityChat(id,name,description){
   if(!user||!supabaseClient){toast('Sign in to use community chat.');return;}
   const card=$$('.communityCard').find(c=>c.querySelector(`[data-community-id="${CSS.escape(id)}"]`));
   const join=card?.querySelector('.joinCommunity');
   if(join&&!join.classList.contains('joined')){toast('Join this community first.');return;}
   activeCommunityId=id;$('#communityChatTitle').textContent=name||'Community chat';$('#communityChatDescription').textContent=description||'Chat with members of this community.';
-  chatPanel.hidden=false;$('#communityChatMessages').innerHTML='<p class="muted">Loading conversation…</p>';
+  chatPanel.hidden=false;document.body.classList.add('community-chat-open');$('#communityChatMessages').innerHTML='<p class="muted">Loading conversation…</p>';requestAnimationFrame(()=>chatPanel.classList.add('community-chat-visible'));
   if(communityChannel){try{await supabaseClient.removeChannel(communityChannel)}catch(_){}communityChannel=null;}
   await loadCommunityMessages();
   try{communityChannel=supabaseClient.channel('lovora-community-'+id).on('postgres_changes',{event:'*',schema:'public',table:'lovora_community_messages',filter:'community_id=eq.'+id},()=>loadCommunityMessages()).subscribe();}catch(e){console.info('Community realtime not enabled; polling will refresh messages.');}
@@ -144,10 +146,12 @@
   const box=$('#communityChatMessages');
   const {data,error}=await supabaseClient.from('lovora_community_messages').select('id,sender_id,content,created_at').eq('community_id',activeCommunityId).order('created_at',{ascending:true}).limit(150);
   if(error){box.innerHTML=`<p class="muted">Could not load messages. Make sure the community SQL migrations have been applied. ${safe(error.message)}</p>`;return;}
-  box.innerHTML=(data||[]).map(m=>`<article class="communityMessage ${m.sender_id===user.id?'mine':''}"><p>${safe(m.content)}</p><small>${m.sender_id===user.id?'You':'Community member'} · ${relativeTime(m.created_at)}</small></article>`).join('')||'<p class="muted">No messages yet. Start a friendly conversation.</p>';
+  const ids=[...new Set((data||[]).map(m=>m.sender_id))];let people={};if(ids.length){const {data:ps}=await supabaseClient.from('profiles').select('id,display_name,username,photo_url,age,city,bio,interests').in('id',ids);(ps||[]).forEach(x=>people[x.id]=x);}
+  box.innerHTML=(data||[]).map(m=>{const pr=people[m.sender_id]||{},nm=m.sender_id===user.id?'You':(pr.display_name||pr.username||'LOVORA member');return `<article class="communityMessage ${m.sender_id===user.id?'mine':''}"><p>${safe(m.content)}</p><small><button class="communitySenderName" type="button" data-sender-id="${safe(m.sender_id)}">${safe(nm)}</button> · ${relativeTime(m.created_at)}</small></article>`}).join('')||'<p class="muted">No messages yet. Start a friendly conversation.</p>';
+  box.querySelectorAll('.communitySenderName').forEach(btn=>btn.addEventListener('click',()=>{const pr=people[btn.dataset.senderId];if(!pr){toast('This member profile is unavailable.');return;}openCommunityMemberProfile(pr);}));
   box.scrollTop=box.scrollHeight;
  }
- $('#closeCommunityChat')?.addEventListener('click',async()=>{chatPanel.hidden=true;activeCommunityId=null;clearInterval(communityRefreshTimer);if(communityChannel&&supabaseClient){try{await supabaseClient.removeChannel(communityChannel)}catch(_){}communityChannel=null;}});
+ $('#closeCommunityChat')?.addEventListener('click',async()=>{chatPanel.classList.remove('community-chat-visible');document.body.classList.remove('community-chat-open');activeCommunityId=null;clearInterval(communityRefreshTimer);if(communityChannel&&supabaseClient){try{await supabaseClient.removeChannel(communityChannel)}catch(_){}communityChannel=null;}});
  $('#communityChatForm')?.addEventListener('submit',async e=>{
   e.preventDefault();const input=$('#communityChatInput'),body=input.value.trim();if(!body||!activeCommunityId)return;
   const submit=e.submitter; if(submit)submit.disabled=true;
@@ -174,9 +178,9 @@
  });
  // Expose refresh hooks for auth/view navigation.
  window.lovoraLoadCommunities=loadRealCommunities;window.lovoraLoadNotifications=loadRealNotifications;
- // Wallet animation and gift previews; do not fake a real payment or debit the live account.
- const COIN_KEY='lovoraCoins_v2';function syncWallet(){const v=localStorage.getItem(COIN_KEY)||'500';if($('#walletBalance'))$('#walletBalance').textContent=Number(v).toLocaleString();if($('#topCoinBalance'))$('#topCoinBalance').textContent=Number(v).toLocaleString();}
- $$('.giftCard').forEach(b=>b.addEventListener('click',()=>{const gift=b.dataset.gift,cost=Number(b.dataset.cost),recipient=currentMemberName();const ok=confirm('Send '+gift+' to '+recipient+' for '+cost.toLocaleString()+' coins? Preview only: no coins will be charged until the secure wallet is connected.');if(!ok)return;localStorage.setItem('lovoraGiftSentPreview:'+recipient,JSON.stringify({gift,cost,at:Date.now()}));toast(gift+' gift marked as sent in preview. Voice call requirement unlocked for '+recipient+'.');}));
+ // Wallet balance comes from Supabase, never localStorage. Gifts and messages use atomic server-side RPCs.
+ async function syncWallet(){if(!user||!supabaseClient){if($('#walletBalance'))$('#walletBalance').textContent='—';if($('#topCoinBalance'))$('#topCoinBalance').textContent='—';return;}const {data,error}=await supabaseClient.rpc('lovora_get_wallet_balance');if(error){console.warn('Wallet balance unavailable:',error.message);return;}const v=Number(data||0);if($('#walletBalance'))$('#walletBalance').textContent=v.toLocaleString();if($('#topCoinBalance'))$('#topCoinBalance').textContent=v.toLocaleString();}
+ $$('.giftCard').forEach(b=>b.addEventListener('click',async()=>{if(!user||!supabaseClient){toast('Sign in before sending a gift.');return;}if(!window.activeMatchId && !activeMatch){toast('Open a real matched conversation before sending a gift.');return;}const gift=b.dataset.gift,cost=Number(b.dataset.cost);const ok=confirm('Send '+gift+' for '+cost.toLocaleString()+' coins? Your wallet will be checked before any coins are charged.');if(!ok)return;const slug=gift.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');const {error}=await supabaseClient.rpc('lovora_send_gift',{p_match_id:activeMatch||window.activeMatchId,p_gift_slug:slug,p_message:''});if(error){toast(error.message);return;}await syncWallet();if(typeof window.loadChats==='function')await window.loadChats();if(typeof window.lovoraLoadNotifications==='function')await window.lovoraLoadNotifications();toast(gift+' sent successfully.');}));
  $('#getCoinsBtn')?.addEventListener('click',()=>window.showView('premium'));$('#topCoinBalance')?.addEventListener('click',()=>window.showView('wallet'));
  // Add visually realistic floating coin particles after successful local preview messages.
  document.addEventListener('click',e=>{if(e.target.closest('#getCoinsBtn'))return;});
